@@ -1,0 +1,6 @@
+Revision history for Perl extension Net::SMS::2Way.
+
+0.01  Mon Aug 13 11:11:59 2007
+	- original version; created by h2xs 1.23 with options
+		-XA -n Net::SMS::2Way
+

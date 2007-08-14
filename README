@@ -1,0 +1,32 @@
+Net-SMS-2Way version 0.01
+=========================
+
+Hello. Thanks for downloading this module.
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+  LWP::UserAgent - tested with version 2.031
+  HTTP::Request - tested with version 1.40
+  Username/Password with http://bulksms.2way.co.za
+  Credits with BulkSMS
+  
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2007 by Lee S. Engel
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.5 or,
+at your option, any later version of Perl 5 you may have available.
+
+
