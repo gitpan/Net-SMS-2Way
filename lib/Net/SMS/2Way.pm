@@ -9,7 +9,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 our $default_options = {
 	base_url => 'http://bulksms.2way.co.za:5567/eapi/submission/send_sms/2/2.0',
@@ -84,7 +84,7 @@ sub send_sms {
 		
 		$number =~ s/\D//g;
 		
-		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27|0[78]) {
+		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27|0[78])/) {
 			$number =~ s/^0(82|82|84|72|73|76|79)(\d+)/27$1$2/;
 		} else {
 			next;
