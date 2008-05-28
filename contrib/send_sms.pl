@@ -11,4 +11,6 @@ print "Number: $number\nMessage: $message\n";
 
 my $retval = $sms->send_sms($message,$number);
 
+print "Version: $Net::SMS::2Way::VERSION\n";
 print "Return: $retval\n";
+print "Error: " . $sms->{error} . "\n" if $sms->{error} ne '';
