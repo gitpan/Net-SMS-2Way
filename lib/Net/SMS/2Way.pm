@@ -9,7 +9,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 our $urls = {
 	ZA => 'http://bulksms.2way.co.za:5567',
@@ -68,7 +68,8 @@ sub new {
 		} 
 	}
 	
-	# Is there a proxy ?
+	# Is there a proxy ? 
+	# TODO: Why am I setting the http_proxy evniroment variable ? - (pls fix this in v0.5)
 	$ENV{http_proxy} = $ref->{http_proxy} if ($ref->{http_proxy} ne '');
 	
 	# Wich base URL to use ?
@@ -90,12 +91,13 @@ sub send_sms {
 	#}
 
 	foreach my $number (@recipients) {
-		next if $number =~ /[a-zA-Z]/;
+		$number =~ s/\D//g;			# strip all non-digits
+		next if $number !~ /\d/;
 		
-		$number =~ s/\D//g;
-		
+		# TODO: This logic is incorrect. To be fixed in v0.5
 		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27|0[78])/) {
-			$number =~ s/^0(82|83|84|72|73|76|79|78)(\d+)/27$1$2/;
+			# SA cell prefixes as per http://en.wikipedia.org/wiki/Telephone_numbers_in_South_Africa
+			$number =~ s/^0(82|83|84|72|73|74|76|78|79)(\d+)/27$1$2/;
 		} else {
 			next;
 		}
@@ -160,7 +162,7 @@ sub get_report {
 	
 	my $url = $this->{base_url} .= '/eapi/status_reports/get_report/2/2.0?';
 	
-  	my $args = { batch_id => $batch_id, optional_fields => 'body,completed_time,created_time,credits,origin_address,source_id' };
+  	my $args = {batch_id => $batch_id, optional_fields => 'body,completed_time,created_time,credits,origin_address,source_id'};
   	
   	my @tmp = $this->http_post($url, $args) || ($this->send_to_log("WARN: Could not do http_post() for get_report(): " . $this->{error}) && return 0);
   	
@@ -201,6 +203,8 @@ sub http_post {
   	
   	$request->content($content);
   	
+	$this->send_to_log("INFO: URL=$url content=$content") if $this->{verbose} > 0;
+	
   	my $response = $uagent->request($request);
 	
 	if ($response->is_success) {
@@ -218,6 +222,8 @@ sub http_post {
 sub send_to_log {
 	my $this = shift @_;
 	my $message = shift @_;
+	
+	chomp($message);
 	
 	if ($this->{logfile} == -1) {
 		return 1;
@@ -247,10 +253,10 @@ sub _parse_config {
 		next if /^$/;		# blank lines...
 		next if /^#/;		# and lines that start with a comment.
 		
-		s/#.*//;		# Strip away all comments
+		s/#.*//;			# Strip away all comments
 		
-		s/^\s+//;		# Remove leading...
-		s/\s+$//;		# ...and trailing whitespace
+		s/^\s+//;			# Remove leading...
+		s/\s+$//;			# ...and trailing whitespace
 		
 		s/\s*=\s*/=/;		
 		
@@ -408,13 +414,7 @@ Net::SMS::2Way - BulkSMS API
  
  Return Values: 
  
-  Returns a pipe-seperated string on success (or apparent success). The format of the string is:
-  
-  status_code|status_description|batch_id
-  
-  For a full explanation of what this string means, etc, please visit http://bulksms.2way.co.za/docs/eapi/submission/send_sms/
- 
-  Returns 0 on failure with the reason for the failure in the error attribute. Eg.
+  Returns 10 on success and 0 on failure with the reason for the failure in the error attribute. Eg.
  
   $retval = $sms->send_sms("This is a test", '0821234567');
   
@@ -422,6 +422,8 @@ Net::SMS::2Way - BulkSMS API
   	print "There was an error!!!\n";
   	print "Error Message: " . $sms->{error} . "\n";
   }
+  
+  Return values that are neither 0 or 10, should be considered as signs of failure. See http://bulksms.2way.co.za/docs/eapi/submission/send_sms/ for a list of possible return values.
   
 =head2 get_credits()
   
@@ -463,9 +465,11 @@ Net::SMS::2Way - BulkSMS API
 
  Lee Engel, lee@kode.co.za
 
+ http://www.learnperl.org/
+
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007 by Lee S. Engel
+Copyright (C) 2007, 2008 by Lee S. Engel
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.5 or,

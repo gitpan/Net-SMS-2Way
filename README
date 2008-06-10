@@ -1,4 +1,4 @@
-Net-SMS-2Way version 0.01
+Net-SMS-2Way version 0.04
 =========================
 
 Hello. Thanks for downloading this module.
@@ -21,9 +21,19 @@ This module requires these other modules and libraries:
   Username/Password with http://bulksms.2way.co.za
   Credits with BulkSMS
   
+WHAT'S NEW IN v0.04
+
+- Fixed some of the documentation.
+- A new and improved version of contrib/send_sms.pl
+- Refactored some logic.
+
+GIFTS
+
+ Gifts are gladly accepted.
+
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2007 by Lee S. Engel
+Copyright (C) 2007, 2008 by Lee S. Engel
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.5 or,

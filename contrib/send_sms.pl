@@ -1,16 +1,40 @@
 #!/usr/bin/perl
 
+# IMPORTANT!!!!!!!  INSTALLATION INSTRUCTIONS #
+# Pre-installation check: Make sure you have installed Net::SMS::2Way and you have read the documentation.
+# 1.) Copy this script to a suitable location (e.g: /usr/local/bin/) and make sure it has the appropriate permissions.
+# 2.) Create a file called sms.conf and place it in a suitable location (e.g. /usr/local/etc/) with appropriate permissions.
+# 3.) Place the following entries in the sms.conf file (without the #'s) Place your username/password in the file. 
+#  verbose = 1
+#  logfile = /usr/local/var/sms.log
+#  username = jbloggs
+#  password = tH3p@5sw0Rd
+#  3.1) Read the Net::SMS::2Way docs for more information on the config file
+# 4.) Edit line number 18 of this script and change it to reflect the focation of the config file e.g.: my $bulksms_config_file = '/usr/local/etc/sms.conf';
+# 5.) Test the script doing the following /usr/local/bin/send_sms.pl 123456789 "This is a test"    NOTE!!! Replace 123456789 with your cell number
+# 6.) View the log file (that your specified in the config file) for any errors
+#####################
+
+my $bulksms_config_file = 'sms.conf';
+
 use Net::SMS::2Way;
 
-my $sms = Net::SMS::2Way->new({config => '/usr/local/sms/sms.config'});
+my $sms = Net::SMS::2Way->new({config => $bulksms_config_file}) || die "FATAL: Could not create Net::SMS::2Way object!\n";
 
-my $number = shift @ARGV;
+my $recipient = shift @ARGV;
 my $message = shift @ARGV;
+my @recipients;
+my $usage = "Usage: $0 [recipient[,recipient]] [message]\n";
 
-print "Number: $number\nMessage: $message\n";
+die $usage unless $recipient;
 
-my $retval = $sms->send_sms($message,$number);
+if ($recipient =~/\d+,\d+/) {
+	@recipients = split /,/, $recipient;
+} else {
+	$recipients[0] = $recipient;
+}
 
-print "Version: $Net::SMS::2Way::VERSION\n";
-print "Return: $retval\n";
-print "Error: " . $sms->{error} . "\n" if $sms->{error} ne '';
+my $retval = $sms->send_sms($message, @recipients);
+
+print 'Error Message: ' . $sms->{error} . "\n" if $sms->{error};
+
