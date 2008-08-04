@@ -9,7 +9,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 
-our $VERSION = '0.04';
+our $VERSION = '0.06';
 
 our $urls = {
 	ZA => 'http://bulksms.2way.co.za:5567',
@@ -22,48 +22,62 @@ our $urls = {
 
 our $default_options = {
 	country => 'ZA',
+	quote => 0,
 };
 
-our @bulksms_send_options = qw(sender msg_class dca want_report routing_group source_id repliable strip_dup_recipients stop_dup_id send_time send_time_unixtime scheduling_description test_always_succeed test_always_fail allow_concat_text_sms oncat_text_sms_max_parts);
+our @bulksms_send_options = qw(
+	sender msg_class dca want_report routing_group source_id repliable strip_dup_recipients 
+	stop_dup_id send_time send_time_unixtime scheduling_description test_always_succeed 
+	test_always_fail allow_concat_text_sms oncat_text_sms_max_parts
+);
 
 our $bulk_sms_send_defaults = {};
 
 our @mandatory_options = qw(username password);
 
-sub new {
+sub new 
+{
 	my $class = shift @_;
 	my $ref = shift @_;
 	my $error;
 	
-	$ref->{script} = $0;	# For logging purposes ?
+	$ref->{script} = $0;
 	
 	# Get settings from config file
 	my $cfg_ref = _parse_config($ref->{config}) if $ref->{config};
 	
 	# Merge settings from config so that the config file settings are overwritten
-	foreach my $key (keys(%$cfg_ref)) {
-		if ($ref->{$key} eq '') {
+	foreach my $key (keys(%$cfg_ref)) 
+	{
+		if ($ref->{$key} eq '') 
+		{
 			$ref->{$key} = $cfg_ref->{$key};
 		}
 	}
 	
 	# Add defaults
-	foreach my $key (%$default_options) {
-		if ($ref->{$key} eq '') {
+	foreach my $key (%$default_options) 
+	{
+		if ($ref->{$key} eq '') 
+		{
 			$ref->{$key} = $default_options->{$key};
 		}
 	}
 	
 	# Add BulkSMS defaults
-	foreach my $key (%$bulk_sms_send_defaults) {
-		if ($ref->{$key} eq '') {
+	foreach my $key (%$bulk_sms_send_defaults) 
+	{
+		if ($ref->{$key} eq '') 
+		{
 			$ref->{$key} = $bulk_sms_send_defaults->{$key};
 		}
 	}
 	
 	#Check mandatory options
-	foreach my $key (@mandatory_options) {
-		if ($ref->{$key} eq '') {
+	foreach my $key (@mandatory_options) 
+	{
+		if ($ref->{$key} eq '') 
+		{
 			$error .= "Option '$key' does not have a value.\n";
 		} 
 	}
@@ -77,32 +91,36 @@ sub new {
 	
 	return 0 if $error;
 	
-	bless ($ref, $class);
+	bless ( $ref, $class );
 }
 
-sub send_sms {
+sub send_sms 
+{
 	my $this = shift @_;
 	my $message = shift @_;
 	my @recipients = @_;
 	
+	# un-comment at your convenience
 	#if (!$message) {
 	#	$this->{error} = "Message is empty!\n";
 	#	return 0;
 	#}
 
-	foreach my $number (@recipients) {
+	foreach my $number (@recipients) 
+	{
 		$number =~ s/\D//g;			# strip all non-digits
 		next if $number !~ /\d/;
 		
-		# TODO: This logic is incorrect. To be fixed in v0.5
-		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27|0[78])/) {
+		next if ($this->{sa_numbers_only} > 0 && $number !~ /^(27|0[78])/);
+
+		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27[78])/) 
+		{
 			# SA cell prefixes as per http://en.wikipedia.org/wiki/Telephone_numbers_in_South_Africa
 			$number =~ s/^0(82|83|84|72|73|74|76|78|79)(\d+)/27$1$2/;
-		} else {
-			next;
 		}
 		
-		if ($number eq '') {
+		if ($number eq '') 
+		{
 			$this->{error} = "One of the recipient numbers is invalid: $number";
 			return 0;
 		}
@@ -112,8 +130,10 @@ sub send_sms {
 	my $args;
 	
 	# Extract all the BulkSMS options
-	foreach my $option (@bulksms_send_options) {
-		if (exists($this->{$option}) && $this->{$option} ne '') {
+	foreach my $option (@bulksms_send_options) 
+	{
+		if ( exists($this->{$option}) && $this->{$option} ne '' ) 
+		{
 			$args->{$option} = $this->{$option};
 		}
 	}
@@ -121,70 +141,127 @@ sub send_sms {
 	$args->{msisdn} = join(',', @recipients);
 	$args->{message} = $message;
 	
+	my @tmp;
 	my $url = $this->{base_url} . '/eapi/submission/send_sms/2/2.0';
-	my @tmp = $this->http_post($url, $args) || ($this->send_to_log("WARN: Could not do http_post() for send_sms(): " . $this->{error}) && return 0);
+
+	if ( $this->{quote} > 0 )
+	{
+		# This is a hack to get a quote on much credits an SMS will cost
+		$url = $this->{base_url} . '/eapi/submission/quote_sms/2/2.0';
+	}
+
+	if (! (@tmp = $this->http_post($url, $args)) )
+	{
+		$this->send_to_log("WARN: Could not do http_post() for send_sms(): " . $this->{error});
+		return 0;
+	}
+
+	return pop( @tmp ) if $this->{quote} > 0;	# ... for the quote_sms hack
+
+	my $retval = pop( @tmp );
+	my $log_mesg = "SMS sent to " . join(',', @recipients) . ". Results: $retval";
+
+	$this->send_to_log( $log_mesg ) if $this->{verbose} > 0;
 	
-	$this->send_to_log("Message sent to " . join(',', @recipients)) if $this->{verbose} > 0;
-	
-	#return pop(@tmp);
-	return join("*", @tmp);
+	return $retval;
 }
 
-sub  get_credits {
+sub quote_sms
+{
 	my $this = shift @_;
-	
+	my $message = shift @_;
+	my @recipients = @_;
+
+	$this->{quote} = 1;
+
+	my $quotation = $this->send_sms($message, @recipients);
+
+	$this->{quote} = 0;
+
+	return $quotation;
+}
+
+sub  get_credits 
+{
+	my $this = shift @_;
 	my $url = $this->{base_url} . '/eapi/user/get_credits/1/1.1';
 	my @tmp = $this->http_post($url);
-	my ($status, $balance) = split /\|/, pop(@tmp) || ($this->send_to_log("WARN: Could not do http_post() for get_credits(): " . $this->{error}) && return -1);
+
+	my ($status, $balance) = split /\|/, pop(@tmp) 
+		|| ($this->send_to_log("WARN: Could not do http_post() for get_credits(): " . $this->{error}) && return -1);
+
 	return $balance;
 }
 
-sub get_inbox {
+sub get_inbox 
+{
 	my $this = shift @_;
 	my $last_retrieved_id = shift @_;
+	my @tmp;
+
+	if ( !defined($last_retrieved_id) )
+	{
+		$last_retrieved_id = 0;
+	}
 	
 	my $url = $this->{base_url} . '/eapi/reception/get_inbox/1/1.0';
 	my $args = {last_retrieved_id => $last_retrieved_id};
-	my @tmp = $this->http_post($url, $args) || ($this->send_to_log("WARN: Could not do http_post() for get_inbox(): " . $this->{error}) && return 0);
-	return @tmp;
+
+	if (! (@tmp = $this->http_post($url, $args)) )
+	{
+		$this->send_to_log("WARN: Could not do http_post() for get_inbox(): " . $this->{error});
+		return 0;
+	}
+
+	my $end_of_headers_marker = 0;
+	my @results;
+
+	foreach my $line (@tmp) 
+	{
+		$end_of_headers_marker = 1 if $line =~ /^$/;
+		next if $line =~ /^$/;
+		push (@results, $line) if $end_of_headers_marker == 1;
+	}
+
+	return @results;
 }
 
-sub get_report {
+sub get_report 
+{
 	my $this = shift @_;
 	my $batch_id = shift @_;
-  	my @report;
-  	my $marker = 0;
+  	my @tmp;
   	
-	if (!$batch_id) {
+	if ( !$batch_id ) 
+	{
 		$this->{error} = "batch_id was not specified\n";
 		return 0;
 	}
 	
 	my $url = $this->{base_url} .= '/eapi/status_reports/get_report/2/2.0?';
-	
   	my $args = {batch_id => $batch_id, optional_fields => 'body,completed_time,created_time,credits,origin_address,source_id'};
+
+	if (! (@tmp = $this->http_post($url, $args)) )
+	{
+		$this->send_to_log( "WARN: Could not do http_post() for get_report(): " . $this->{error} ); 
+		return 0;
+	}
+
+	my $end_of_headers_marker = 0;
+	my @results;
+
+	foreach my $line (@tmp) 
+	{
+		$end_of_headers_marker = 1 if $line =~ /^$/;
+		next if $line =~ /^$/;
+		push (@results, $line) if $end_of_headers_marker == 1;
+	}
   	
-  	my @tmp = $this->http_post($url, $args) || ($this->send_to_log("WARN: Could not do http_post() for get_report(): " . $this->{error}) && return 0);
-  	
-  	foreach my $row (@tmp) {
-  		if (/(\d+)\|([\w\s\d]+)$/) {
-  			if ($1 != 0) {
-  				$this->{error} = "$1: $2";
-  				return 0;
-  			} else {
-  				$marker = 1;
-  			}
-  		}
-  		
-  		if ($marker) {
-  			push (@report, $row);
-  		}
-  	}
-  	
-	return @report;
+	return @results;
 }
 
-sub http_post {
+sub http_post 
+{
 	my $this = shift @_;
 	my $url = shift @_;
 	my $args = shift @_;
@@ -197,7 +274,8 @@ sub http_post {
   	
   	my $content = 'username=' . $this->{username} . '&password=' . $this->{password};
   	
-  	foreach my $arg (keys(%$args)) {
+  	foreach my $arg (keys(%$args)) 
+	{
   		$content .= '&' . $arg . '=' . $args->{$arg};
   	}
   	
@@ -207,29 +285,37 @@ sub http_post {
 	
   	my $response = $uagent->request($request);
 	
-	if ($response->is_success) {
-		my @tmp = split /\n/, $response->as_string;
+	if ($response->is_success) 
+	{
+		my @tmp = split( /\n/, $response->as_string );
 		return @tmp;
-	} elsif ($response->is_error) {
+	} 
+	elsif ($response->is_error) 
+	{
 		$this->{error} = $response->code . ':' . $response->message . "\n";
 		return 0;
-	} else {
+	} 
+	else 
+	{
 		$this->{error} = $response->code . ':' . $response->message . ':' . $response->content . "\n";
 		return 0;
 	}
 }
 
-sub send_to_log {
+sub send_to_log 
+{
 	my $this = shift @_;
 	my $message = shift @_;
 	
 	chomp($message);
 	
-	if ($this->{logfile} == -1) {
+	if ($this->{logfile} == -1) 
+	{
 		return 1;
 	}
 	
-	if ($this->{logfile} eq '') {
+	if ($this->{logfile} eq '') 
+	{
 		$this->{logfile} = "$0.log";
 	}
 	
@@ -240,18 +326,20 @@ sub send_to_log {
 	close (LGFH);
 }
 
-sub _parse_config {
+sub _parse_config 
+{
 	my $file = shift @_;
 	my $cfg_ref;
 	
 	open (CFG, $file) || die "ERROR: Could not open $file: $!\n";
 	
-	while (<CFG>) {
+	while (<CFG>) 
+	{
 		chomp;
 		
-		next if /^\s+$/;	# Ignore lines with just whitespace...
-		next if /^$/;		# blank lines...
-		next if /^#/;		# and lines that start with a comment.
+		next if /^\s+$/;		# Ignore lines with just whitespace...
+		next if /^$/;			# blank lines...
+		next if /^#/;			# and lines that start with a comment.
 		
 		s/#.*//;			# Strip away all comments
 		
@@ -308,11 +396,11 @@ Net::SMS::2Way - BulkSMS API
  get_inbox
  get_report
  get_credits
+ quote_sms
  
  Methods yet to be implemented:
  
  send_batch
- quote_sms
  public_add_member 
  public_remove_member
 
@@ -405,7 +493,24 @@ Net::SMS::2Way - BulkSMS API
  2.) Use the http_proxt attribute when creating the object e.g.
  
   $sms = SMS->new({http_proxy => 'http://10.0.0.1:8080'});
- 
+
+=head2 quote_sms() 
+ quote_sms(STRING, LIST) - The quote_sms() will receive a quotation of how many credits an SMS message will cost.
+
+ This method uses the exact same parameters as send_sms()
+
+ Return Values:
+
+ This method returns a pipe (|) delimited string with the following format:
+
+ status code|status description|quotation total
+
+ Example:
+
+ 0|Quotation issued|quote_total
+
+ If the status code is >0 then you can assume an error. The status description should give you the reason why.
+
 =head2 send_sms()
  
  send_sms(STRING, LIST) - The send_sms() method will connect and send a text message to the list of mobile numbers in the LIST.
@@ -414,16 +519,15 @@ Net::SMS::2Way - BulkSMS API
  
  Return Values: 
  
-  Returns 10 on success and 0 on failure with the reason for the failure in the error attribute. Eg.
+  Returns a pipe-seperated i.e. |, which has the format of:
+
+ status_code|status_description|batch_id 
+
+ Where batch_id is optional, depending on the error. A status code of 0 (or 1) usually means that everything OK. This is not guarenteed. Read http://bulksms.2way.co.za/docs/eapi/submission/send_sms/ for a full explanation. 
  
-  $retval = $sms->send_sms("This is a test", '0821234567');
-  
-  if (!$retval) {
-  	print "There was an error!!!\n";
-  	print "Error Message: " . $sms->{error} . "\n";
-  }
-  
-  Return values that are neither 0 or 10, should be considered as signs of failure. See http://bulksms.2way.co.za/docs/eapi/submission/send_sms/ for a list of possible return values.
+  my ($status_code, $status_desc, $batch_id) = split( /\|/, $sms->send_sms("This is a test", '0821234567') );
+
+ Also, be sure to check $sms->{error} if there are any other errors.
   
 =head2 get_credits()
   
@@ -437,19 +541,30 @@ Net::SMS::2Way - BulkSMS API
 
  get_report(INTEGER) - Takes 1 argument which is batch_id i.e. the id returned by a successful submission to send_sms(). It's fully explained at http://bulksms.2way.co.za/docs/eapi/status_reports/get_report/.
  
- Return Values: 0 on failure with the error message in $sms->{error}
+ Return Values:
  
  Returns an array on success. Each element has a string which has the format of:
  
  msisdn|status_code|body|completed_time|created_time|credits|origin_address|source_id
 
-=head2 get_report_hash_ref()
+ The first element of the array will contain a status code with the format of:
 
- TODO: Finish documentation ASAP!!!
+ status_code|status_description
+
+ A status code of 0 is returned on success. Anything else is an error.
 
 =head2 get_inbox()
 
- TODO: Finish documentation ASAP!!!
+ get_inbox(INTEGER) - Takes 1 arguments, the last retrieved id i.e. the id of the last message retrieved. Defaults to 0, which will return all items in inbox.
+
+ Returns an array. The array holds 1 element per inbox item which is | seperated. 
+
+ Example: 40108573|447531175884|This is the message|2008-08-01 13:51:52|447797803732|69582240
+
+ The format is explained in http://bulksms.2way.co.za/docs/eapi/reception/get_inbox/
+
+ IMPORTANT: The first element of the returned array holds the status code, thus you need to shift the array before reading the inbox contents.
+
  
 =head1 SUPPORT
 

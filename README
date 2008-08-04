@@ -1,4 +1,4 @@
-Net-SMS-2Way version 0.04
+Net-SMS-2Way version 0.06
 =========================
 
 Hello. Thanks for downloading this module.
@@ -21,11 +21,10 @@ This module requires these other modules and libraries:
   Username/Password with http://bulksms.2way.co.za
   Credits with BulkSMS
   
-WHAT'S NEW IN v0.04
+WHAT'S NEW IN v0.06
 
+- Added support for quote_sms 
 - Fixed some of the documentation.
-- A new and improved version of contrib/send_sms.pl
-- Refactored some logic.
 
 GIFTS
 
