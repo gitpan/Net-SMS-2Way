@@ -9,7 +9,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 our $urls = {
 	ZA => 'http://bulksms.2way.co.za:5567',
@@ -83,7 +83,6 @@ sub new
 	}
 	
 	# Is there a proxy ? 
-	# TODO: Why am I setting the http_proxy evniroment variable ? - (pls fix this in v0.5)
 	$ENV{http_proxy} = $ref->{http_proxy} if ($ref->{http_proxy} ne '');
 	
 	# Wich base URL to use ?
@@ -92,6 +91,57 @@ sub new
 	return 0 if $error;
 	
 	bless ( $ref, $class );
+}
+
+sub send_batch
+{
+	my $this = shift @_;
+	my $data = shift @_;
+	my %data = %$data;
+	my $csv_data = "msisdn,message\n";
+	my $recipient_count = 0;
+	
+	foreach my $number ( keys( %data ) )
+	{
+		$number =~ s/\D//g;			# strip all non-digits
+		next if $number !~ /\d/;
+		
+		next if ($this->{sa_numbers_only} > 0 && $number !~ /^(27|0[78])/);
+
+		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27[78])/) 
+		{
+			# SA cell prefixes as per http://en.wikipedia.org/wiki/Telephone_numbers_in_South_Africa
+			$number =~ s/^0(82|83|84|72|73|74|76|78|79)(\d+)/27$1$2/;
+		}
+		
+		if ($number eq '') 
+		{
+			$this->{error} = "One of the recipient numbers is invalid: $number";
+			return 0;
+		}
+		
+		$csv_data .= "\"$number\",\"" . $data{$number} . "\"\n";
+		$recipient_count++;
+	}
+	
+	return 0 unless $recipient_count;
+	
+	my $url = $this->{base_url} . '/eapi/submission/send_batch/1/1.0';
+	my $args = { batch_data => $csv_data };
+	my @tmp;
+	
+	if (! (@tmp = $this->http_post($url, $args)) )
+	{
+		$this->send_to_log("WARN: Could not do http_post() for send_batch(): " . $this->{error});
+		return 0;
+	}
+
+	my $retval = pop( @tmp );
+	my $log_mesg = "SMS batch sent. Results: $retval";
+
+	$this->send_to_log( $log_mesg ) if $this->{verbose} > 0;
+	
+	return $retval;
 }
 
 sub send_sms 
@@ -181,7 +231,7 @@ sub quote_sms
 	return $quotation;
 }
 
-sub  get_credits 
+sub get_credits 
 {
 	my $this = shift @_;
 	my $url = $this->{base_url} . '/eapi/user/get_credits/1/1.1';
@@ -269,9 +319,15 @@ sub http_post
 	my $timeout = $this->{timeout} || 30;
 	
 	my $uagent = LWP::UserAgent->new(timeout => $timeout);
+
+	if( $this->{http_proxy} )
+	{
+		$uagent->proxy(['http'], $this->{http_proxy});
+	}
+	
   	my $request = HTTP::Request->new(POST => $url);
   	$request->content_type('application/x-www-form-urlencoded');
-  	
+	
   	my $content = 'username=' . $this->{username} . '&password=' . $this->{password};
   	
   	foreach my $arg (keys(%$args)) 
@@ -382,13 +438,13 @@ Net::SMS::2Way - BulkSMS API
   
 =head1 DESCRIPTION
  
- This module allows you to send SMS text messages using the HTTP API that is available from BulkSMS 
- in South Africa (http://bulksms.2way.co.za) but can be configured to work with all the BulkSMS sites. 
- You can find a list of them at http://www.bulksms.com/selectwebsite.htm
+This module allows you to send SMS text messages using the HTTP API that is available from BulkSMS 
+in South Africa (http://bulksms.2way.co.za) but can be configured to work with all the BulkSMS sites. 
+You can find a list of them at http://www.bulksms.com/selectwebsite.htm
 
 =head2 The BulkSMS API
 
- This module implements only the HTTP API. You can read the HTTP API documentation at http://bulksms.2way.co.za/docs/eapi/
+This module implements only the HTTP API. You can read the HTTP API documentation at http://bulksms.2way.co.za/docs/eapi/
  
  Here is a list of the methods that have been implemented:
  
@@ -397,20 +453,20 @@ Net::SMS::2Way - BulkSMS API
  get_report
  get_credits
  quote_sms
- 
- Methods yet to be implemented:
- 
  send_batch
+ 
+Methods yet to be implemented:
+ 
  public_add_member 
  public_remove_member
 
 =head1 REQUIREMENTS
 
- 1.) You need to register at one of the BulkSMS sites (http://www.bulksms.com/selectwebsite.htm) and have some credits available.
+1.) You need to register at one of the BulkSMS sites (http://www.bulksms.com/selectwebsite.htm) and have some credits available.
 
- 2.) You will need the LWP modules installed. This module was tested with version 5.75
- 
- 3.) An internet connection.
+2.) You will need the LWP modules installed. This module was tested with version 5.75
+
+3.) An internet connection.
 
 =head1 METHODS
 
@@ -495,6 +551,7 @@ Net::SMS::2Way - BulkSMS API
   $sms = SMS->new({http_proxy => 'http://10.0.0.1:8080'});
 
 =head2 quote_sms() 
+
  quote_sms(STRING, LIST) - The quote_sms() will receive a quotation of how many credits an SMS message will cost.
 
  This method uses the exact same parameters as send_sms()
@@ -515,7 +572,7 @@ Net::SMS::2Way - BulkSMS API
  
  send_sms(STRING, LIST) - The send_sms() method will connect and send a text message to the list of mobile numbers in the LIST.
  
- The second parametre can also be a single scalar i.e. a single number as a string.
+ The second parameter can also be a single scalar i.e. a single number as a string.
  
  Return Values: 
  
@@ -529,6 +586,20 @@ Net::SMS::2Way - BulkSMS API
 
  Also, be sure to check $sms->{error} if there are any other errors.
   
+=head2 send_batch()
+
+ send_batch( HASH_REF ) - The send_batch() method will send a batch of SMS messages to a list of numbers specified in the HASH_REF hash references.
+
+ Return Value: This method has the same return values as send_sms()
+ 
+ Example:
+ 
+ my $hash_ref = { '27841234567' => 'This is a message',  '27841234568' => 'This is a different message' };
+ 
+ $sms->send_batch( $hash_ref );
+ 
+ Be sure to check $sms->{error} if there are any other errors.
+
 =head2 get_credits()
   
   get_credits() - Takes no arguments and will return the amounts of credits available.
@@ -565,7 +636,6 @@ Net::SMS::2Way - BulkSMS API
 
  IMPORTANT: The first element of the returned array holds the status code, thus you need to shift the array before reading the inbox contents.
 
- 
 =head1 SUPPORT
 
  Bugs: You can email the author directly at lee@kode.co.za
@@ -580,11 +650,9 @@ Net::SMS::2Way - BulkSMS API
 
  Lee Engel, lee@kode.co.za
 
- http://www.learnperl.org/
-
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007, 2008 by Lee S. Engel
+Copyright (C) 2007, 2008, 2009 by Lee S. Engel
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.5 or,

@@ -17,6 +17,8 @@
 
 my $bulksms_config_file = '/etc/sms.cfg';
 
+die "FATAL: Your config file: $bulksms_config_file does not exist!" unless -e $bulksms_config_file;
+
 use Net::SMS::2Way;
 
 my $sms = Net::SMS::2Way->new({config => $bulksms_config_file}) || die "FATAL: Could not create Net::SMS::2Way object!\n";
