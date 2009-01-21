@@ -1,5 +1,7 @@
 Changes
 contrib/send_sms.pl
+contrib/email2sms.pl
+contrib/sms.conf.SAMPLE
 lib/Net/SMS/2Way.pm
 Makefile.PL
 MANIFEST
