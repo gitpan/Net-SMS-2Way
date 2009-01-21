@@ -9,7 +9,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';		# 21 Jan. 2009
 
 our $urls = {
 	ZA => 'http://bulksms.2way.co.za:5567',
@@ -162,10 +162,10 @@ sub send_sms
 		next if $number !~ /\d/;
 		
 		next if ($this->{sa_numbers_only} > 0 && $number !~ /^(27|0[78])/);
-
+		
 		if ($this->{sa_numbers_only} > 0 && $number =~ /^(27[78])/) 
 		{
-			# SA cell prefixes as per http://en.wikipedia.org/wiki/Telephone_numbers_in_South_Africa
+			# SA mobile prefixes as per http://en.wikipedia.org/wiki/Telephone_numbers_in_South_Africa
 			$number =~ s/^0(82|83|84|72|73|74|76|78|79)(\d+)/27$1$2/;
 		}
 		
@@ -320,7 +320,7 @@ sub http_post
 	
 	my $uagent = LWP::UserAgent->new(timeout => $timeout);
 
-	if( $this->{http_proxy} )
+	if( exists($this->{http_proxy}) && $this->{http_proxy} ne '' )
 	{
 		$uagent->proxy(['http'], $this->{http_proxy});
 	}
@@ -434,8 +434,7 @@ Net::SMS::2Way - BulkSMS API
   $sms->send_sms('Hello World!', ['27821234567','27831234567','27841234567']);
   
   $sms->send_sms('Hello World!', @recipients);
-  
-  
+
 =head1 DESCRIPTION
  
 This module allows you to send SMS text messages using the HTTP API that is available from BulkSMS 
@@ -638,7 +637,7 @@ Methods yet to be implemented:
 
 =head1 SUPPORT
 
- Bugs: You can email the author directly at lee@kode.co.za
+ Send all bugs, comments & suggestions to the author directly at lee@kode.co.za
 
  Commercial support is available.
  
